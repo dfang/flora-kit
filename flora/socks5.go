@@ -2,11 +2,12 @@ package flora
 
 import (
 	"encoding/binary"
-	ss "shadowsocks-go/shadowsocks"
 	"io"
 	"log"
 	"net"
 	"strconv"
+
+	ss "github.com/shadowsocks/shadowsocks-go/shadowsocks"
 )
 
 /*

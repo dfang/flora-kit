@@ -9,7 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	ss "shadowsocks-go/shadowsocks"
+	ss "github.com/shadowsocks/shadowsocks-go/shadowsocks"
+	// socks "github.com/shadowsocks/go-shadowsocks2/socks"
+	// core "github.com/shadowsocks/go-shadowsocks2/core"
 )
 
 const (
@@ -65,10 +67,12 @@ var (
 
 var proxyConfig *ProxyConfig
 
+// Run entrypoint
 func Run(surgeCfg, geoipCfg string) {
 	proxyConfig = LoadConfig(surgeCfg, geoipCfg)
 	listenAddr := fmt.Sprintf("%s:%d", proxyConfig.LocalHost, proxyConfig.LocalSocksPort)
 	initProxySettings(proxyConfig.systemBypass, listenAddr)
+
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Fatal(err)
@@ -99,9 +103,11 @@ func handleConnection(conn net.Conn) {
 	)
 
 	buf := make([]byte, 1)
+
 	io.ReadFull(conn, buf)
 
 	first := buf[0]
+
 	switch first {
 	case socksVer5:
 		err = handshake(conn, first)
@@ -111,20 +117,26 @@ func handleConnection(conn net.Conn) {
 	default:
 		host, hostType, rawData, err = httpProxyConnect(conn, first)
 	}
+
 	if nil != err {
 		return
 	}
+
 	remote, err := matchRuleAndCreateConn(conn, host, hostType, rawData)
 	if nil != err {
 		log.Printf("%v", err)
 		return
 	}
+
 	//create remote connect
 	defer func() {
 		if !isClose {
 			remote.Close()
 		}
 	}()
+
+	// go socks.socksLocal(flags.Socks, addr, ciph.StreamConn)
+
 	go ss.PipeThenClose(conn, remote, nil)
 	ss.PipeThenClose(remote, conn, nil)
 	isClose = true
@@ -140,7 +152,7 @@ func matchRuleAndCreateConn(conn net.Conn, addr string, hostType int, raw []byte
 	if nil == rule {
 		switch hostType {
 		case typeIPv4, typeIPv6:
-			rule = matchIpRule(host)
+			rule = matchIPRule(host)
 		case typeDm:
 			rule = matchDomainRule(host)
 		}
@@ -152,6 +164,7 @@ func matchRuleAndCreateConn(conn net.Conn, addr string, hostType int, raw []byte
 			rule = &Rule{Match: "default", Action: ServerTypeDirect}
 		}
 	}
+
 	return createRemoteConn(raw, rule, addr)
 }
 
@@ -174,7 +187,7 @@ func matchDomainRule(domain string) *Rule {
 	return nil
 }
 
-func matchIpRule(addr string) *Rule {
+func matchIPRule(addr string) *Rule {
 	ips := resolveRequestIPAddr(addr)
 	if nil != ips {
 		country := strings.ToLower(GeoIPs(ips))
@@ -191,14 +204,14 @@ func matchBypass(addr string) *Rule {
 	ip := net.ParseIP(addr)
 	for _, h := range proxyConfig.bypassDomains {
 		var bypass bool = false
-		var isIp = nil != ip
+		var isIP = nil != ip
 		switch h.(type) {
 		case net.IP:
-			if isIp {
+			if isIP {
 				bypass = ip.Equal(h.(net.IP))
 			}
 		case *net.IPNet:
-			if isIp {
+			if isIP {
 				bypass = h.(*net.IPNet).Contains(ip)
 			}
 		case string:
@@ -218,6 +231,7 @@ func matchBypass(addr string) *Rule {
 
 func createRemoteConn(raw []byte, rule *Rule, host string) (net.Conn, error) {
 	if server, err := proxyConfig.GetProxyServer(rule.Action); nil == err {
+		// server is direct, reject, or shadowsocks based on rule
 		conn, err := server.DialWithRawAddr(raw, host)
 		if nil != err {
 			log.Printf("[%s]->[%s] 💊 [%s]", rule.Match, rule.Action, host)
@@ -228,5 +242,6 @@ func createRemoteConn(raw []byte, rule *Rule, host string) (net.Conn, error) {
 		}
 		return conn, err
 	}
+
 	return nil, errConnect
 }

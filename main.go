@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/huacnlee/flora-kit/flora"
+	"github.com/dfang/flora-kit/flora"
 )
 
 func main() {
@@ -12,5 +12,4 @@ func main() {
 	flag.StringVar(&geoipdb, "d", "geoip.mmdb", "specify geoip db file")
 	flag.Parse()
 	flora.Run(configFile, geoipdb)
-
 }

@@ -3,20 +3,21 @@ package flora
 import (
 	"fmt"
 	"log"
-		"net"
+	"math/rand"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 
-	"ini"
-	ss "shadowsocks-go/shadowsocks"
-	"math/rand"
+	"github.com/go-ini/ini"
+	core "github.com/shadowsocks/go-shadowsocks2/core"
 )
 
 const (
 	DEFAULT_SOCKS_PORT = 1080
 )
 
+// ProxyConfig Proxy Config
 type ProxyConfig struct {
 	SurgeConfig    *ini.File
 	GeoDbPath      string
@@ -34,11 +35,13 @@ type ProxyConfig struct {
 	ruleGeoIP          []*Rule
 	ruleFinal          *Rule
 }
+
 type proxyGroup struct {
 	mode         string
 	proxyServers []ProxyServer
 }
 
+// LoadConfig Load Config from config File and geo File
 func LoadConfig(cfgFile string, geoFile string) *ProxyConfig {
 	proxyConfig := ProxyConfig{}
 	var iniOpts = ini.LoadOptions{
@@ -61,10 +64,10 @@ func LoadConfig(cfgFile string, geoFile string) *ProxyConfig {
 	}
 
 	proxyConfig.SurgeConfig, err = ini.LoadSources(iniOpts, speCfgName, defaultCfgName, userConfigFilename)
-
 	if err != nil {
 		panic(fmt.Sprintf("Config file %v not found, or have error: \n\t%v", cfgFile, err))
 	}
+
 	loadGeneral(&proxyConfig)
 	loadProxy(&proxyConfig)
 	loadProxyGroup(&proxyConfig)
@@ -128,14 +131,14 @@ func loadProxy(config *ProxyConfig) {
 		if serverType == ServerTypeShadowSocks || serverType == ServerTypeCustom {
 			//[ip:port,password,method]
 			if len(proxyStrCfg) > 1 {
-				c, err := ss.NewCipher(proxyStrCfg[3], proxyStrCfg[4])
+				// c, err := ss.NewCipher(proxyStrCfg[3], proxyStrCfg[4])
+				c, err := core.PickCipher(proxyStrCfg[3], []byte(""), proxyStrCfg[4])
 				if nil != err {
 					log.Printf("Loading shadowsocks proxy server %s has error ", proxyName)
 					continue
 				}
 				proxy = NewShadowSocks(strings.Join(proxyStrCfg[1:3], ":"), c)
 			}
-
 		} else if serverType == ServerTypeDirect {
 			proxy = NewDirect()
 		} else if serverType == ServerTypeReject {
@@ -146,31 +149,31 @@ func loadProxy(config *ProxyConfig) {
 			config.proxyServer[proxyName] = proxy
 		}
 	}
-
 }
 
-func (c *ProxyConfig) GetProxyServer(action string) (ProxyServer,error) {
+// GetProxyServer GetProxyServer
+func (c *ProxyConfig) GetProxyServer(action string) (ProxyServer, error) {
 	const maxFailCnt = 30
 
 	a := strings.ToLower(action)
 
 	if server, ok := c.proxyServer[a]; ok {
-		return server,nil
+		return server, nil
 	}
 
 	if group, ok := c.proxyGroup[a]; ok {
 		for _, s := range group.proxyServers {
-			eff := make([]ProxyServer,0)
+			eff := make([]ProxyServer, 0)
 			if s.FailCount() < maxFailCnt {
 				eff = append(eff, s)
 			}
 			l := len(eff)
 			if l > 0 {
-				return eff[rand.Intn(l)],nil
+				return eff[rand.Intn(l)], nil
 			}
 		}
 	}
-	return  nil,errProxy
+	return nil, errProxy
 }
 
 //[Proxy Group] Section

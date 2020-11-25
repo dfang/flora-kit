@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"geoip2-golang"
+	"github.com/oschwald/geoip2-golang"
 )
 
 var geoDB *geoip2.Reader
